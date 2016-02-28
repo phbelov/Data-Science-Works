@@ -1,0 +1,161 @@
+---
+title: "midterm"
+author: "Philip Belov"
+date: "October 13, 2015"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+```
+
+```{r}
+users = read_csv("/principal/materials/minor/midterm/users.csv")
+orders = read_csv("/principal/materials/minor/midterm/orders.csv")
+inventory = read_csv("/principal/materials/minor/midterm/inventory.csv")
+```
+
+# TASK 1
+
+## 1
+### *Table.* People who use the shop more frequently
+```{r, results="asis"}
+orders_frequency = left_join(users, orders, by="user_id") %>%
+  group_by(user_id) %>% 
+  dplyr::summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  top_n(10, count)
+orders_frequency = 
+  left_join(orders_frequency, users, by="user_id") %>% 
+  select(user_id, first_name, last_name, count)
+pander::pandoc.table(orders_frequency)
+```
+
+## 2
+### *Table.* 3 most expensive cars
+```{r, results="asis"}
+cars = filter(inventory, category=="Cars") %>% 
+  select(item, price)%>% 
+  arrange(desc(price)) %>% 
+  top_n(3, price)
+pander::pandoc.table(cars)
+```
+
+## 3
+```{r}
+phones = filter(inventory, category=="Phones") %>% select(-category)
+phones_ext = 
+  left_join(phones, orders, by="inventory_id") %>% 
+  select(inventory_id, item, quantity)
+phones_ext = group_by(phones_ext, inventory_id) #%>% 
+phones_ext = dplyr::summarize(phones_ext, sum_quantity = sum(quantity)) 
+phones_ext = arrange(phones_ext, desc(sum_quantity))
+phones_ext =
+  left_join(phones_ext, phones, by="inventory_id") %>%
+  select(inventory_id, item, sum_quantity)
+```
+### *Graph.* The most popular phones
+```{r}
+ggplot() +
+  geom_bar(data=phones_ext, aes(x=item, y=sum_quantity), stat="identity", fill="white", color="blue") +
+  xlab("Phone Model") +
+  ylab("Quantity") +
+  coord_flip()
+```
+
+*From this graph you can see that the most popular phone manufacturing company is __Apple__. The second place is held by __Samsung__.*
+
+# TASK 2
+
+## 1
+```{r}
+faceless = select(users, user_id, gender, job_title)
+faceless = left_join(faceless, orders, by="user_id")
+faceless = left_join(faceless, inventory, by="inventory_id")
+faceless = select(faceless, user_id, gender, job_title, inventory_id, quantity, category, item, price)
+ggplot() +
+  geom_bar(data=faceless, aes(x=category, fill=gender)) +
+  xlab("Product Category") +
+  ylab("Quantity") +
+  scale_fill_brewer(palette="Accent")
+```
+
+*From the graph above we can see that __Alcohol__ is the most popular product category amongst people. We can conclude that each gender has nearly equal preferences in terms of product category. The two tables below prove that statement.*
+
+```{r}
+male_preferences = faceless %>% filter(gender=="M") %>% group_by(category) %>% dplyr::summarize(count = n()) %>% arrange(desc(count))
+female_preferences = faceless %>% filter(gender=="F") %>% group_by(category) %>% dplyr::summarize(count = n()) %>% arrange(desc(count))
+```
+### *Table.* Male Preferences
+```{r, results="asis"}
+pander::pandoc.table(male_preferences)
+```
+### *Table.* Female Preferences
+```{r, results="asis"}
+pander::pandoc.table(female_preferences)
+```
+
+## 2
+*__Note:__ faceless df is used later in task 3. Initially, I misunderstood the task 2.2 that's why it's not so rationally solved.*
+```{r}
+faceless = mutate(faceless, sum_price=price*quantity)
+expenditures = group_by(faceless, user_id) %>% dplyr::summarize(group_sum_price = sum(sum_price))
+moneyspenders = left_join(expenditures, users, by="user_id") %>% arrange(desc(group_sum_price)) %>%
+  select(user_id, first_name, last_name, job_title, group_sum_price)
+```
+
+### *Table.* Top money spenders
+```{r, results="asis"}
+pander::pandoc.table(top_n(moneyspenders, 5, group_sum_price))
+```
+
+*The people who spends most money are __managers__. The top moneyspender is Antonio Turner!*
+
+# TASK 3
+
+## 1 & 2
+```{r}
+tbl_categories = table(faceless$category, faceless$job_title)
+chisq.test(tbl_categories) 
+chisq <- chisq.test(tbl_categories) 
+```
+
+```{r, results="asis", eval=FALSE}
+pander::pandoc.table(chisq$residuals, split.cells = c(4,7,7,7,7,7))
+```
+
+```{r, warning=FALSE}
+df_resid = as.data.frame(chisq$residuals)
+df_count = as.data.frame(tbl_categories)
+
+ggplot() + 
+  geom_raster(data = df_resid, aes(Var2, Var1, fill = Freq), hjust = 0.5, vjust = 0.5) + 
+  scale_fill_gradient2("Pearson residuals", low = "#2166ac", mid = "#f7f7f7", high = "#b2182b", midpoint = 0) +
+  geom_text(data = df_count, aes(Var2, Var1, label = Freq)) +
+  xlab("Job") +
+  ylab("Product Category") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+*From this graph we can see that workers in the education have a tendency towards alcoholism. IT workers, however, prefer to buy phones.*
+
+*This is my initial solution of task 2.2.*
+```{r}
+faceless_ext =
+  left_join(faceless, expenditures, by="user_id") %>% 
+  select(user_id, gender, job_title, group_sum_price) %>% 
+  subset(!duplicated(user_id)) %>% 
+  group_by(gender) %>% 
+  arrange(desc(group_sum_price))
+
+ggplot() +
+  geom_bar(data=faceless_ext, aes(x=job_title, y=group_sum_price, fill=gender), stat="identity") +
+  xlab("Spent money") +
+  ylab("Job") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+*The biggest amount of money is spent by __managers__ then come the __IT guys__, the third place is taken by workers in __health care__ sphere. Also from the graph we can see that male managers and IT guys are spending more money than females in the appropriate job categories. In the other 3 categories women are dominating in the amount of money spent.*

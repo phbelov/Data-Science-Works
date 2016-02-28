@@ -1,0 +1,138 @@
+#Briefing 
+Below you can find some useful functions for data manipulation
+https://www.rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+```
+
+```{r}
+users = read_csv("/principal/materials/minor/midterm/users3.csv")
+orders = read_csv("/principal/materials/minor/midterm/orders3.csv")
+inventory = read_csv("/principal/materials/minor/midterm/inventory.csv")
+```
+
+## Descriptive statisitics
+
+`dplyr::n()` Number of values in a vector   
+`min()` Minimum value in a vector  
+`max()` Maximum value in a vector  
+`mean()` Mean value of a vector   
+`median()` Median value of a vector  
+
+## Logical expressions
+
+**<** Less than   
+**>** Greater than   
+**!=** Not equal to   
+**==** Equal to   
+**is.na** Is NA   
+**!is.na** Is not NA   
+**<=** Less than or equal to   
+**>=** Greater than or equal to   
+
+**&** And  
+`dplyr::filter(dataframe, logical_criteria & logical_criteria)`  
+**|** Or  
+`dplyr::filter(users, logical_criteria | logical_criteria)`
+
+## Fast way to look at dataframes
+
+`head()` - returns the first parts of vector or data frame  
+`tail()` - returns the last parts of vector or data frame
+
+## Data Manipulation
+
+`filter(dataframe, logical_criteria)` Extract rows that meet logical criteria.
+```{r}
+dplyr::filter(users, country == "Russia")
+```
+
+`select(dataframe, column_names)` Select columns by name or helper function.
+```{r}
+dplyr::select(users, first_name, last_name, country)
+```
+
+`arrange(dataframe, column)` Order rows by values of a column (low to high).
+```{r}
+dplyr::arrange(users, first_name)
+```
+
+`top_n(dataframe, n, ordering_column)` Select the top n entries in each group, ordered by column.
+```{r}
+dplyr::top_n(inventory, 10, price)
+```
+
+`dplyr::left_join(dataframe_A, dataframe_B, by = "common_column")` # Join matching rows from b to a.
+`dplyr::inner_join(dataframe_A, dataframe_B, by = "common_column")` # Join data. Retain only rows in both sets. 
+
+```{r}
+orders_with_description = dplyr::left_join(inventory, orders, by = "inventory_id")
+```
+
+`mutate(dataframe, new_column = expression)` Compute and append one or more new columns.
+```{r}
+dplyr::mutate(orders_with_description, sum_price = price * quantity)
+```
+
+### Summarize
+`group_by(dataframe, column) %>% summarize(new_column = expression)` Compute separate summary row for each group. 
+  
+`group_by()` function breaks down a dataset into specified groups of rows. When you then apply `summarise()` on the resulting object they’ll be automatically applied “by group”. We use `summarise()` with aggregate functions, which take a vector of values and return a single number.
+
+```{r}
+dplyr::group_by(users, country) %>% dplyr::summarize(count = n())
+```
+
+### Tables
+
+
+```{r, results='asis'}
+country_summary = dplyr::group_by(users, country) %>% dplyr::summarize(count = n()) %>% arrange(desc(count))
+
+pander::pandoc.table(top_n(country_summary, 5, count))
+```
+
+## Charts
+
+### geom_histogram
+
+`ggplot() +
+  geom_histogram(data = ..., aes(x =continous variable), fill = to change the interior colouring , colour = to change the colour of bin outline,  binwidth = width of bins) + # The columns are positioned over a label that represents a quantitative variable
+  ggtitle("...") + # title of the graph
+  xlab("...") + # title of X axis
+  ylab("...")` # title of Y axis
+  
+```{r}
+ggplot() +
+  geom_histogram(data = orders, aes(x = date), fill = "gray50", colour = "black")
+```
+
+### geom_bar
+
+`ggplot() + 
+  geom_bar(data = ..., aes(x =qualitative variable, y =..., fill = setting fill equal to a factor varible uses a discrete colour scale))` # The columns are positioned over a label that represents a qualitative (categorical) variable
+
+```{r}
+ggplot() + 
+  geom_bar(data = users, aes(x = country, fill = gender))
+```
+
+
+### geom_boxplot
+
+`ggplot() +
+  geom_boxplot(data = ..., aes(x = qualitative variable, y = continous variable))` # good way to compare distributions for qualitative variables
+
+```{r}
+ggplot() +
+  geom_boxplot(data = orders_with_description, aes(x = category, y = quantity)) 
+```
+
+
+
+
+
+

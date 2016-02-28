@@ -1,0 +1,166 @@
+---
+title: "midterm2"
+author: "Philip Belov"
+date: "December 8, 2015"
+output: html_document
+---
+
+##1.
+A) `r 150+30`
+B) 150
+C) `r (30+30)/(30+30+150+110)*100`%
+
+##2. 
+A) Classification. *Reformulation:* What's the probability of the catdog being a cat?
+B) Classification. *Reformulation:* What's the probability of the baked food to appear to be, e.g. a cake?
+C) Classification. *Reformulation:* What's the probability of my attendance of the tomorrow class?
+D) Classification. *Reformulation:* For example, it might be needed to define what is the value of the loan. Or: what's the probability of a student returning the loan.
+E) It depends, in my opinion.
+* Regression (if the marks can have a floating point, e.g. 5.5, 7.8). _Reformulation:_ For example, we might need to predict if a student will have a "great" (8-10), "good" (6-7), "bad" (4-5), or "not passed" (1-3) mark.
+* Classification. If the marks are "stationary", e.g. student can only get (1 || 2 || 3 || ... || 9 || 10) or (A || B || C || D || E || F) then it's a classification problem. _Reformulation:_ We can reformulate it into a regression problem, for example, by trying to predict the probability of a student getting a particular mark or by considering the marks as numerics and showcasing what mark the student is likely to get (for example, 7.5 would mean that student is likely to get 8, at the same time 7.3 would mean that the mark will be closer to 7).
+
+##3.
+####3.1
+
+* The numbers show the classification rate, i.e. how many elements we have classified correctly.
+* I will describe the following node: (MI, 9/13).
+
+If the amount of black people is more than 0.63%, population of white men is less than 98%, overall population is less than 61,000, number of black men is less than 2.8%, number of white people is less than 97%, and percentage of black people is less than 2.4%, then it's Minnesota.
+
+I can also sum up the above info.
+*If*
+
+* the population of black people is between 0.63% and 2.4%.
+* the population of white men is less than 97%.
+* the overall population is less than 61,000.
+
+*Then* the state is _Minnesota_.
+
+####3.2
+The tree with 14 splits is the best, because cross-validation error is 0.8388 in this case, which is minimum amongst other values. So, the cost-complexity parameter should equal 0.008955.
+
+####3.3
+First, let's estimate the white population. It is `r 100-0.3-3`%.
+
+So, we have the following data:
+
+* White: 96.7%
+* Black: 3%
+* Asian: 0.3%
+* Population: 13500
+
+Let's look at our tree and go down right from its root node according to provided data, which is:
+
+1. Black population: 3% >= 0.63% -> we go left.
+2. White population: 96.7% < 98% -> we go left.
+3. Population overall: 13,500 < 61,000 -> we go left.
+4. Black population: 3% >= 2.8% -> we go left. 
+
+_**AND IT'S ILLINOIS!**_
+
+
+##4.
+```{r Setup, message=FALSE, warning=FALSE, comment=""}
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+library(pander)
+
+HousetypeData <- read.csv("~/materials/minor/midterm2/Housetype_Data.txt", header = F, 
+                       col.names = c("type_of_home", "sex", "martial_status", "age", "edu",
+                                     "ocupation", "income", "living_time", "dual_incomes", "pih",
+                                     "pih_u18", "householder_status",
+                                     "ethnic_cl", "lang"))
+
+HousetypeData <- within(HousetypeData, {
+sex <- factor(sex)
+martial_status <- factor(martial_status)
+edu <- factor(edu)
+ocupation <- factor(ocupation)
+living_time <- factor(living_time)
+dual_incomes <- factor(dual_incomes)
+householder_status <- factor(householder_status)
+type_of_home <- factor(type_of_home)
+ethnic_cl <- factor(ethnic_cl)
+lang <- factor(lang)
+age <- ordered(age)
+income <- ordered(income)
+pih <- ordered(pih)
+pih_u18 <- ordered(pih_u18)
+})
+```
+
+I'd like to fit a classification tree to see the relation between *type of home* and other variables. I will put some extra information in our tree so that we can see the classification rate, and somehow estimate its performance.
+```{r MagicTreeHiddenFunction, message=FALSE, warning=FALSE, echo=FALSE}
+split.fun <- function(x, labs, digits, varlen, faclen)
+{
+    labs <- gsub(",", ", ", labs)
+    for(i in 1:length(labs)) {
+        labs[i] <- paste(strwrap(labs[i], width=25), collapse="\n")
+    }
+    labs <- gsub(" = ", ":\n", labs)
+labs }
+```
+
+```{r GrowATree, message=FALSE, warning=FALSE, comment=""}
+set.seed(850)
+HousetypeTree = rpart(type_of_home~., data = HousetypeData, control = rpart.control(cp = 0.001), method = "class")
+prp(HousetypeTree, extra=102, split.fun=split.fun, under=T)
+```
+
+The tree is not so fine (because it's kind of complicated). 
+
+Let's see how well our tree performs. For that we'll use confusion matrix.
+```{r Predict, message=FALSE, warning=FALSE, comment=""}
+predicted = predict(HousetypeTree, HousetypeData, type="class")
+pander(table(HousetypeData$type_of_home, predicted))
+ep <- sum(diag(table(HousetypeData$type_of_home, predicted)))/sum(table(HousetypeData$type_of_home, predicted))
+```
+
+The effectiveness of our model is __*`r ep`*__. Let's note that.
+
+As long as our tree is quite complex, we can try to prune it. For this, we'll look at the cross-validation error by using *plotcp* and *printcp* functions.
+```{r ShowSomeInfoAboutTheTree, message=FALSE, warning=FALSE, comment=""}
+plotcp(HousetypeTree)
+printcp(HousetypeTree)
+min = which.min(HousetypeTree$cptable[,"xerror"])
+xerror=HousetypeTree$cptable[,"xerror"][min]
+CP=HousetypeTree$cptable[min, "CP"] 
+```
+
+The least cross-validation error is __*`r xerror`*__. For this error, the cost-complexity parameter is __*`r CP`*__. 
+
+Let's try to prune the tree, where the cv error is the least.
+```{r PruneTheTree, message=FALSE, warning=FALSE, comment=""}
+HousetypeTree.Pruned = prune(HousetypeTree, cp=CP)
+prp(HousetypeTree.Pruned, extra=102, split.fun = split.fun, under=T)
+```
+
+We haven't cut off a huge part of the original tree. Only one small node. Let's see if our model has become better. By looking at cross-validation error we can obviously say that it's, of course, better. But let's try to use the pruned tree for prediction.
+
+```{r}
+predicted.pruned = predict(HousetypeTree.Pruned, HousetypeData, type="class")
+pander(table(HousetypeData$type_of_home, predicted.pruned))
+ep.pruned <- sum(diag(table(HousetypeData$type_of_home, predicted.pruned)))/sum(table(HousetypeData$type_of_home, predicted.pruned))
+```
+
+Pruned tree model performs worse as long as __*`r ep.pruned`*__ is smaller than __*`r ep`*__, although not that significantly.
+
+Some additional info about the pruned tree.
+```{r, message=FALSE, warning=FALSE, comment=""}
+plotcp(HousetypeTree.Pruned)
+printcp(HousetypeTree.Pruned)
+min.pruned = which.min(HousetypeTree.Pruned$cptable[,"xerror"])
+xerror.pruned=HousetypeTree.Pruned$cptable[,"xerror"][min]
+```
+
+The tree has become (slightly) less complex and easier to interpret. 
+Classification rates increased and that's for good. 
+
+Let's try to interpret the tree.
+If the householder status of a particular person is either 'own' or 'rent', then he lives in the house.
+If it's not:
+If there are 4 or more persons living in the household, the income is equal or more than $20,000,  the race is Hispanic, Pacific Islander, White or Other then the household is a house. (I described the leftmost node as an example).
+
+
+_That's it. Thanks for reading my midterm test._
